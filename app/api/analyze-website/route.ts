@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { OpenAI } from 'openai';
+import OpenAI from 'openai';
 
+// Initialize OpenAI with server-side API key
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY // Use server-side environment variable
 });
 
 export async function GET(request: Request) {
@@ -16,50 +17,53 @@ export async function GET(request: Request) {
 
     const prompt = `Analyze this website: ${url}
 
-You are a professional website and business analyst. Analyze the provided website URL and extract detailed information about the business.
+Please provide a structured analysis with the following information:
 
-Provide your analysis in the following structure:
+1. Industry: Choose from these categories only:
+   - Technology
+   - Marketing & Advertising
+   - Healthcare
+   - Education
+   - Finance
+   - E-commerce
+   - Real Estate
+   - Travel & Tourism
+   - Manufacturing
+   - Retail
+   - Other
+
+2. Target Audience:
+   - Gender: ["Male", "Female", "All"]
+   - Languages: Primary languages supported
+   - Location: Geographic focus
+
+3. Services: List 3-5 main services or products
+
+Format the response as JSON:
 {
-  "projectName": "Business name",
-  "industry": "Main business category (e.g., E-commerce, Technology, Healthcare)",
-  "description": "Brief description of the business",
-  "services": [
-    "List of 3-5 specific services or products offered",
-    "Each service should be clear and specific",
-    "Focus on main offerings"
-  ],
-  "targetAudience": {
-    "age": ["18-24", "25-34", "35-44", "45-54", "55+"],
-    "gender": ["Male", "Female", "All"],
-    "languages": ["Primary languages served"],
-    "location": ["Geographic regions served"]
+  "industry": "string",
+  "services": ["string"],
+  "target_audience": {
+    "gender": ["string"],
+    "languages": ["string"],
+    "location": ["string"]
   }
-}
-
-Guidelines:
-1. Category should be specific and accurate
-2. Services should be actual offerings, not generic terms
-3. Target audience should be realistic and based on website content
-4. Include 3-5 services maximum
-5. Use standard age ranges
-6. Be specific with locations (e.g., "North America", "Europe", "Global")
-7. Only include languages that are actually supported
-8. If information is unclear, use the most likely values based on website context`;
+}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
-          content: "You are an expert business analyst specializing in website analysis and market research. Provide detailed, accurate analysis based on website content and context. Always respond in valid JSON format."
+          content: "You are an expert business analyst. Provide analysis in the exact JSON format requested."
         },
         {
           role: "user",
           content: prompt
         }
       ],
-      temperature: 0.5,
-      max_tokens: 1000
+      temperature: 0.3,
+      max_tokens: 500
     });
 
     const content = response.choices[0].message.content;
@@ -69,17 +73,6 @@ Guidelines:
 
     try {
       const analysis = JSON.parse(content);
-
-      // Format project name for subdomains
-      const parsedUrl = new URL(url);
-      const domainParts = parsedUrl.hostname.replace('www.', '').split('.');
-      
-      if (domainParts.length > 2) {
-        const subdomain = domainParts[0];
-        const mainDomain = domainParts[1];
-        analysis.projectName = `${subdomain.charAt(0).toUpperCase() + subdomain.slice(1)} ${mainDomain.toUpperCase()}`;
-      }
-
       return NextResponse.json(analysis);
     } catch (error) {
       console.error('Failed to parse OpenAI response:', error);
