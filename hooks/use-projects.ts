@@ -4,22 +4,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { Project, NewProject } from '@/types';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [channel, setChannel] = useState<RealtimeChannel | null>(null);
 
   const fetchProjects = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setProjects([]);
+        setIsLoading(false);
         return;
       }
-
-      setIsLoading(true);
-      setUserId(user.id);
 
       const { data, error } = await supabase
         .from('projects')
@@ -37,75 +36,122 @@ export function useProjects() {
     }
   }, []);
 
+  // Set up real-time subscription
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const setupRealtimeSubscription = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Clean up existing subscription if any
+        if (channel) {
+          await supabase.removeChannel(channel);
+        }
+
+        // Create new subscription
+        const newChannel = supabase
+          .channel(`projects-${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'projects',
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              console.log('INSERT event received:', payload);
+              setProjects((current) => [payload.new as Project, ...current]);
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'DELETE',
+              schema: 'public',
+              table: 'projects',
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              console.log('DELETE event received:', payload);
+              setProjects((current) => 
+                current.filter((project) => project.id !== payload.old.id)
+              );
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'projects',
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              console.log('UPDATE event received:', payload);
+              setProjects((current) =>
+                current.map((project) =>
+                  project.id === payload.new.id ? (payload.new as Project) : project
+                )
+              );
+            }
+          );
+
+        const status = await newChannel.subscribe();
+        console.log('Subscription status:', status);
+        setChannel(newChannel);
+      } catch (error) {
+        console.error('Error setting up real-time subscription:', error);
+      }
+    };
+
+    setupRealtimeSubscription();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (channel) {
+        console.log('Cleaning up real-time subscription');
+        supabase.removeChannel(channel);
+      }
+    };
+  }, []); // Empty dependency array as we want this to run once
+
+  // Initial fetch and auth state changes
+  useEffect(() => {
+    fetchProjects();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
         fetchProjects();
       } else if (event === 'SIGNED_OUT') {
         setProjects([]);
-        setUserId(null);
-        setIsLoading(false);
       }
     });
 
-    // Initial fetch
-    fetchProjects();
-
     return () => {
-      subscription?.unsubscribe();
+      subscription.unsubscribe();
     };
   }, [fetchProjects]);
 
-  useEffect(() => {
-    if (!userId) return;
+  const deleteProject = async (projectId: string) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
 
-    const channel = supabase.channel(`projects:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'projects',
-          filter: `user_id=eq.${userId}`
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setProjects(prev => [payload.new as Project, ...prev]);
-          } else if (payload.eventType === 'DELETE') {
-            setProjects(prev => prev.filter(project => project.id !== payload.old.id));
-          } else if (payload.eventType === 'UPDATE') {
-            setProjects(prev => prev.map(project => 
-              project.id === payload.new.id ? payload.new as Project : project
-            ));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [userId]);
+      if (error) throw error;
+      toast.success('Project deleted successfully');
+    } catch (error: any) {
+      console.error('Error deleting project:', error);
+      toast.error(error.message || 'Failed to delete project');
+    }
+  };
 
   const addProject = async (projectData: NewProject): Promise<Project> => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-
-      // Normalize URL for comparison
-      const normalizedUrl = projectData.url.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
-
-      // Check for existing project with same normalized URL
-      const { data: existingProject } = await supabase
-        .from('projects')
-        .select('id, url')
-        .eq('user_id', user.id)
-        .filter('url', 'ilike', `%${normalizedUrl}%`)
-        .maybeSingle();
-
-      if (existingProject) {
-        throw new Error('A project with this URL already exists');
-      }
 
       const formattedProject = {
         name: projectData.name,
@@ -146,6 +192,7 @@ export function useProjects() {
     projects,
     isLoading,
     addProject,
+    deleteProject,
     refreshProjects: fetchProjects,
   };
 }

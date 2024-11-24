@@ -5,8 +5,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  basePath: process.env.NODE_ENV === 'production' ? '/Finalgrowthh' : '',
-  assetPrefix: process.env.NODE_ENV === 'production' ? '/Finalgrowthh/' : '',
+  trailingSlash: true,
 };
 
 module.exports = nextConfig;

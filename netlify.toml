@@ -1,0 +1,27 @@
+[build]
+  command = "npm run build"
+  publish = ".next"  # Changed from "out" to ".next" for standard Next.js output
+
+[build.environment]
+  NODE_VERSION = "18"
+  NEXT_TELEMETRY_DISABLED = "1"
+  NETLIFY_NEXT_PLUGIN_SKIP = "false"  # Added to ensure Next.js plugin is used
+
+# Remove the redirect to index.html as Next.js handles routing differently
+# [[redirects]]
+#   from = "/*"
+#   to = "/index.html"
+#   status = 200
+
+# Instead, use this for handling dynamic routes in Next.js
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Content-Security-Policy = "frame-ancestors 'none'"  # Added for extra security
