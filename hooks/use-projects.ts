@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Project } from '@/types';
+import type { Project, NewProject } from '@/types';
 
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
   const fetchProjects = useCallback(async () => {
@@ -15,10 +15,10 @@ export function useProjects() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setProjects([]);
-        setIsLoading(false);
         return;
       }
 
+      setIsLoading(true);
       setUserId(user.id);
 
       const { data, error } = await supabase
@@ -38,8 +38,6 @@ export function useProjects() {
   }, []);
 
   useEffect(() => {
-    fetchProjects();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN') {
         fetchProjects();
@@ -49,6 +47,9 @@ export function useProjects() {
         setIsLoading(false);
       }
     });
+
+    // Initial fetch
+    fetchProjects();
 
     return () => {
       subscription?.unsubscribe();
@@ -86,7 +87,7 @@ export function useProjects() {
     };
   }, [userId]);
 
-  const addProject = async (projectData: any) => {
+  const addProject = async (projectData: NewProject): Promise<Project> => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');

@@ -8,14 +8,14 @@ import { ProjectStepThree } from './project-steps/step-three';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useProjects } from '@/hooks/use-projects';
-import { toast } from 'sonner';
+import type { NewProject } from '@/types';
 
 interface NewProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const initialFormData = {
+const initialFormData: NewProject = {
   name: '',
   url: '',
   services: [],
@@ -29,11 +29,11 @@ const initialFormData = {
 
 export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) {
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState<NewProject>(initialFormData);
   const { addProject } = useProjects();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const updateFormData = (data: Partial<typeof formData>) => {
+  const updateFormData = (data: Partial<NewProject>) => {
     setFormData(prev => ({ ...prev, ...data }));
   };
 
