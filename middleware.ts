@@ -10,14 +10,17 @@ export async function middleware(req: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession();
 
+  // Get the base path from the environment or use default
+  const basePath = process.env.NODE_ENV === 'production' ? '/Finalgrowthh' : '';
+
   // Auth pages redirect - Immediate redirect if session exists
-  if (session && (req.nextUrl.pathname === '/' || req.nextUrl.pathname.startsWith('/auth'))) {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
+  if (session && (req.nextUrl.pathname === `${basePath}/` || req.nextUrl.pathname.startsWith(`${basePath}/auth`))) {
+    return NextResponse.redirect(new URL(`${basePath}/dashboard`, req.url));
   }
 
   // Protected routes - Immediate redirect if no session
-  if (!session && req.nextUrl.pathname.startsWith('/dashboard')) {
-    return NextResponse.redirect(new URL('/', req.url));
+  if (!session && req.nextUrl.pathname.startsWith(`${basePath}/dashboard`)) {
+    return NextResponse.redirect(new URL(`${basePath}/`, req.url));
   }
 
   return res;
